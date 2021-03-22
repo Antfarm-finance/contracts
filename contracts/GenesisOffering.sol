@@ -234,8 +234,8 @@ contract GenesisOffering is Ownable {
         IERC20 lp =
             IERC20(UniswapV2Factory.getPair(address(USDT), address(AFI)));
         uint256 lpBalance = lp.balanceOf(address(this));
-        if (lpBalance > 0) {
-            lp.safeApprove(address(UniswapV2Router), lpBalance);
+        assert (lpBalance > 0);
+        lp.safeApprove(address(UniswapV2Router), lpBalance);
             UniswapV2Router.removeLiquidity(
                 address(USDT),
                 address(AFI),
@@ -245,7 +245,6 @@ contract GenesisOffering is Ownable {
                 address(this),
                 block.timestamp
             );
-        }
         EmergencyWithdrawTokenSnapshot = AFI.balanceOf(address(this));
         EmergencyWithdrawUSDTSnapshot = USDT.balanceOf(address(this));
         EmergencyWithdrawTotalSupplySnapshot = AFI.totalSupply();

@@ -333,12 +333,12 @@ contract Stake is Ownable {
         require(pool.allocPoint > 0, "deposit: failed because pool alloc point is zero");
         // transfer fee to feeAddr
         uint256 fee = _amount.mul(pool.depositFee).div(10000);
+        _amount = _amount.sub(fee);
         pool.lpToken.safeTransferFrom(
             address(_msgSender()),
             address(feeAddr),
             fee
         );
-        _amount = _amount.sub(fee);
 
         updatePool(_pid);
         if (user.amount > 0) {
@@ -385,10 +385,11 @@ contract Stake is Ownable {
     function emergencyWithdraw(uint256 _pid) public {
         PoolInfo storage pool = poolInfo[_pid];
         UserInfo storage user = userInfo[_pid][_msgSender()];
-        pool.lpToken.safeTransfer(address(_msgSender()), user.amount);
-        emit EmergencyWithdraw(_msgSender(), _pid, user.amount);
+        uint256 amount = user.amount;
         user.amount = 0;
         user.rewardDebt = 0;
+        pool.lpToken.safeTransfer(address(_msgSender()), amount);
+        emit EmergencyWithdraw(_msgSender(), _pid, amount);
     }
 
     function safeRewardTokenTransfer(address _to, uint256 _amount) internal {
