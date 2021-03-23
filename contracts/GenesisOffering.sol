@@ -134,19 +134,18 @@ contract GenesisOffering is Ownable {
     function addLiquidity(uint256 timestamp)
         public
         isAddLiquiditying(timestamp)
-        notInEmergencyMode
     {
         uint256 termTimestamp = getTerm(timestamp);
         assert(TermTotalPurchased[termTimestamp] == 0);
         TermTotalPurchased[termTimestamp] = 1;
-        rebase(repatriation());
+        rebase(repatriation(termTimestamp));
         IERC20 lp =
             IERC20(UniswapV2Factory.getPair(address(USDT), address(AFI)));
         lp.safeApprove(address(Stake), lp.balanceOf(address(this)));
         Stake.deposit(Stake.getLPPoolIndex(), lp.balanceOf(address(this)));
     }
 
-    function donate(uint256 amount_) public notInEmergencyMode {
+    function donate(uint256 amount_) public {
         assert(isOffering());
         USDT.safeTransferFrom(msg.sender, address(this), amount_);
         GlobalPurchased = GlobalPurchased.add(amount_);
@@ -187,7 +186,7 @@ contract GenesisOffering is Ownable {
                 );
     }
 
-    function claim(uint256 termId) public notInEmergencyMode {
+    function claim(uint256 termId) public {
         uint256 reward = balanceOf(msg.sender, termId);
         assert(reward > 0);
         UserTermClaimed[msg.sender][termId] = true;
@@ -204,7 +203,7 @@ contract GenesisOffering is Ownable {
         return totalIncome.sub(UserTotalHarvested[user]);
     }
 
-    function harvest() public notInEmergencyMode {
+    function harvest() public {
         uint256 balanceSnapshot = AFI.balanceOf(address(this));
         Stake.claim(Stake.getLPPoolIndex());
         GlobalHarvested = GlobalHarvested.add(
@@ -229,22 +228,28 @@ contract GenesisOffering is Ownable {
     }
 
     function emergencyUnstake() public onlyOwner notInEmergencyMode {
+        assert(
+            block.timestamp >=
+                Rounds[Rounds.length - 1][0].add(
+                    DurationPerTerm.mul(DaysPurchasePerRound)
+                )
+        );
         EmergencyWithdrawBlockSnapshot = block.number;
         Stake.emergencyWithdraw(Stake.getLPPoolIndex());
         IERC20 lp =
             IERC20(UniswapV2Factory.getPair(address(USDT), address(AFI)));
         uint256 lpBalance = lp.balanceOf(address(this));
-        assert (lpBalance > 0);
+        assert(lpBalance > 0);
         lp.safeApprove(address(UniswapV2Router), lpBalance);
-            UniswapV2Router.removeLiquidity(
-                address(USDT),
-                address(AFI),
-                lpBalance,
-                0,
-                0,
-                address(this),
-                block.timestamp
-            );
+        UniswapV2Router.removeLiquidity(
+            address(USDT),
+            address(AFI),
+            lpBalance,
+            0,
+            0,
+            address(this),
+            block.timestamp
+        );
         EmergencyWithdrawTokenSnapshot = AFI.balanceOf(address(this));
         EmergencyWithdrawUSDTSnapshot = USDT.balanceOf(address(this));
         EmergencyWithdrawTotalSupplySnapshot = AFI.totalSupply();
@@ -258,16 +263,20 @@ contract GenesisOffering is Ownable {
             mintable.getPriorVotes(msg.sender, EmergencyWithdrawBlockSnapshot);
         AFI.safeTransfer(
             msg.sender,
-            EmergencyWithdrawTokenSnapshot.mul(snapshot).div(EmergencyWithdrawTotalSupplySnapshot)
+            EmergencyWithdrawTokenSnapshot.mul(snapshot).div(
+                EmergencyWithdrawTotalSupplySnapshot
+            )
         );
         USDT.safeTransfer(
             msg.sender,
-            EmergencyWithdrawUSDTSnapshot.mul(snapshot).div(EmergencyWithdrawTotalSupplySnapshot)
+            EmergencyWithdrawUSDTSnapshot.mul(snapshot).div(
+                EmergencyWithdrawTotalSupplySnapshot
+            )
         );
     }
 
-    function repatriation() private returns (uint256) {
-        uint256[2] memory round = getRound(0);
+    function repatriation(uint256 termTimestamp) private returns (uint256) {
+        uint256[2] memory round = getRound(termTimestamp);
         uint256 total =
             RoundTotalPurchased[round[0]].div(DaysAddLiquidityPerRound);
         uint256 toBuy = total.mul(4).div(10);
